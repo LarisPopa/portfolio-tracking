@@ -1,7 +1,6 @@
 node_modules/
-app/node_modules/
-app/dist/
-app/tsconfig.tsbuildinfo
+dist/
+tsconfig.tsbuildinfo
 
 # Never commit personal financial exports
 *.xlsx
