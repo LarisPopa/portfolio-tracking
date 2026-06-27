@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
-  ResponsiveContainer, ReferenceLine,
+  ResponsiveContainer, ReferenceLine, LabelList,
 } from 'recharts';
 import type { RevolutReport, RevolutTrade, RevolutDividend } from '../lib/revolutParser';
 import type { PriceSeries } from '../lib/analytics';
@@ -268,6 +268,12 @@ function AllocationChart({ trades }: { trades: RevolutTrade[] }) {
             {data.map((d, i) => (
               <Cell key={i} fill={d.pnl >= 0 ? C_GREEN : C_RED} opacity={0.75} />
             ))}
+            <LabelList
+              dataKey="pnlPct"
+              position="right"
+              formatter={(v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`}
+              style={{ fill: 'var(--text-2)', fontSize: 12 }}
+            />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -300,20 +306,24 @@ function Badge({ children }: { children: React.ReactNode }) {
 
 // --- Trades table -------------------------------------------------------------
 
-type SortKey = 'dateSold' | 'symbol' | 'grossPnL' | 'grossProceeds' | 'costBasis';
+type SortKey = 'dateSold' | 'symbol' | 'grossPnL' | 'grossProceeds' | 'costBasis' | 'returnPct';
 
 function TradesTable({ trades }: { trades: RevolutTrade[] }) {
   const [sort, setSort] = useState<SortKey>('dateSold');
   const [asc, setAsc] = useState(false);
 
+  const enriched = useMemo(() =>
+    trades.map(t => ({ ...t, returnPct: t.costBasis > 0 ? (t.grossPnL / t.costBasis) * 100 : 0 })),
+  [trades]);
+
   const rows = useMemo(() => {
     const dir = asc ? 1 : -1;
-    return [...trades].sort((a, b) => {
+    return [...enriched].sort((a, b) => {
       if (sort === 'dateSold') return (a.dateSold.getTime() - b.dateSold.getTime()) * dir;
       if (sort === 'symbol') return a.symbol.localeCompare(b.symbol) * dir;
       return (a[sort] - b[sort]) * dir;
     });
-  }, [trades, sort, asc]);
+  }, [enriched, sort, asc]);
 
   const flip = (k: SortKey) => { if (k === sort) setAsc(p => !p); else { setSort(k); setAsc(false); } };
   const ind  = (k: SortKey) => k === sort ? (asc ? ' ↑' : ' ↓') : '';
@@ -334,6 +344,7 @@ function TradesTable({ trades }: { trades: RevolutTrade[] }) {
               <th className="num" style={{ cursor: 'pointer' }} onClick={() => flip('costBasis')}>Cost{ind('costBasis')}</th>
               <th className="num" style={{ cursor: 'pointer' }} onClick={() => flip('grossProceeds')}>Proceeds{ind('grossProceeds')}</th>
               <th className="num" style={{ cursor: 'pointer' }} onClick={() => flip('grossPnL')}>P&amp;L{ind('grossPnL')}</th>
+              <th className="num" style={{ cursor: 'pointer' }} onClick={() => flip('returnPct')}>Return %{ind('returnPct')}</th>
               <th className="num">Fees</th>
             </tr>
           </thead>
@@ -347,11 +358,12 @@ function TradesTable({ trades }: { trades: RevolutTrade[] }) {
                 <td className="num">{fmt(t, t.costBasis)}</td>
                 <td className="num">{fmt(t, t.grossProceeds)}</td>
                 <td className={`num ${signClass(t.grossPnL)}`}>{fmt(t, t.grossPnL)}</td>
+                <td className={`num ${signClass(t.returnPct)}`}>{t.returnPct >= 0 ? '+' : ''}{t.returnPct.toFixed(2)}%</td>
                 <td className="num dim">{fmt(t, t.fees)}</td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24 }} className="dim">No trades found.</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: 'center', padding: 24 }} className="dim">No trades found.</td></tr>
             )}
           </tbody>
         </table>
