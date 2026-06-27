@@ -90,6 +90,16 @@ export default function App() {
       .catch((e) => setBench({ spy: null, qqq: null, loading: false, error: String(e?.message ?? e) }));
   }, [report]);
 
+  // Fetch benchmarks for the Revolut period when no XTB report is loaded
+  useEffect(() => {
+    if (!revolutReport?.period || report) return; // XTB benchmarks already cover it
+    const { from, to } = revolutReport.period;
+    setBench((s) => ({ ...s, loading: true, error: null }));
+    fetchBenchmarks(from, to)
+      .then(({ spy, qqq }) => setBench({ spy, qqq, loading: false, error: null }))
+      .catch(() => setBench(s => ({ ...s, loading: false })));
+  }, [revolutReport, report]);
+
   const result: EquityResult | null = useMemo(() => {
     if (!report) return null;
     const today = report.dateTo ?? new Date();
@@ -223,7 +233,7 @@ export default function App() {
         </>
       )}
 
-      {revolutReport && <RevolutSummary report={revolutReport} />}
+      {revolutReport && <RevolutSummary report={revolutReport} bench={{ spy: bench.spy, qqq: bench.qqq }} />}
 
       {!report && !revolutReport && !parsing && (
         <div
