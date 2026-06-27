@@ -5,6 +5,8 @@ import { buildEquity } from './lib/analytics';
 import type { EquityResult, PriceSeries } from './lib/analytics';
 import { fetchBenchmarks } from './lib/benchmarks';
 import { fetchQuotes } from './lib/quotes';
+import { parseRevolutReport } from './lib/revolutParser';
+import type { RevolutReport } from './lib/revolutParser';
 import { Kpis } from './components/Kpis';
 import type { MarketKpi } from './components/Kpis';
 import { EquityChart } from './components/EquityChart';
@@ -14,6 +16,7 @@ import { HoldingsTable } from './components/HoldingsTable';
 import { ClosedTradesTable } from './components/ClosedTradesTable';
 import { DividendLog } from './components/DividendLog';
 import { PeriodReturns } from './components/PeriodReturns';
+import { RevolutSummary } from './components/RevolutSummary';
 
 interface BenchmarkState {
   spy: PriceSeries | null;
@@ -32,6 +35,11 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  const [revolutReport, setRevolutReport] = useState<RevolutReport | null>(null);
+  const [revolutError, setRevolutError] = useState<string | null>(null);
+  const [revolutParsing, setRevolutParsing] = useState(false);
+  const revolutInputRef = useRef<HTMLInputElement | null>(null);
+
   const handleFile = async (file: File) => {
     setError(null);
     setParsing(true);
@@ -43,6 +51,23 @@ export default function App() {
       setReport(null);
     } finally {
       setParsing(false);
+    }
+  };
+
+  const handleRevolutFile = async (file: File) => {
+    setRevolutError(null);
+    setRevolutParsing(true);
+    try {
+      const r = await parseRevolutReport(file);
+      if (r.trades.length === 0 && r.dividends.length === 0) {
+        throw new Error('No trades or dividends found — make sure this is a Revolut P&L Statement PDF.');
+      }
+      setRevolutReport(r);
+    } catch (e: any) {
+      setRevolutError(e?.message ?? 'Failed to parse Revolut PDF.');
+      setRevolutReport(null);
+    } finally {
+      setRevolutParsing(false);
     }
   };
 
@@ -134,7 +159,7 @@ export default function App() {
         <div className="upload-bar">
           {report && <span className="muted">{report.cashOps.length} cash ops · {report.closed.length} closed trades</span>}
           <button onClick={() => inputRef.current?.click()}>
-            {report ? 'Load different file' : 'Upload XLSX'}
+            {report ? 'Reload XTB' : 'Upload XTB XLSX'}
           </button>
           <input
             ref={inputRef}
@@ -143,34 +168,23 @@ export default function App() {
             style={{ display: 'none' }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
           />
+          <button onClick={() => revolutInputRef.current?.click()} disabled={revolutParsing}>
+            {revolutParsing ? 'Parsing…' : revolutReport ? 'Reload Revolut' : 'Upload Revolut PDF'}
+          </button>
+          <input
+            ref={revolutInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            style={{ display: 'none' }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleRevolutFile(f); e.target.value = ''; }}
+          />
         </div>
       </header>
 
       {error && <div className="error">{error}</div>}
+      {revolutError && <div className="error">Revolut: {revolutError}</div>}
       {bench.error && <div className="error">{bench.error}</div>}
 
-      {!report && (
-        <div
-          className={`dropzone ${dragging ? 'dragging' : ''}`}
-          onClick={() => inputRef.current?.click()}
-          onDrop={onDrop}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-        >
-          {parsing ? (
-            <div><strong>Parsing…</strong></div>
-          ) : (
-            <>
-              <h2 style={{ margin: '0 0 8px' }}>Drop your XTB XLSX export here</h2>
-              <div>or click to browse · <strong>account history → Excel export</strong></div>
-              <div className="muted" style={{ marginTop: 16 }}>
-                Sheets expected: <code>Closed Positions</code>, <code>Cash Operations</code>.
-                <br />Benchmarks: SPY (S&P 500) and QQQ (NASDAQ 100) — adjusted close from Yahoo Finance via the dev-server proxy.
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
       {report && result && (
         <>
@@ -208,6 +222,25 @@ export default function App() {
           </footer>
         </>
       )}
+
+      {revolutReport && <RevolutSummary report={revolutReport} />}
+
+      {!report && !revolutReport && !parsing && (
+        <div
+          className={`dropzone ${dragging ? 'dragging' : ''}`}
+          onClick={() => inputRef.current?.click()}
+          onDrop={onDrop}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+        >
+          <h2 style={{ margin: '0 0 8px' }}>Drop your XTB XLSX export here</h2>
+          <div>or click to browse · <strong>account history → Excel export</strong></div>
+          <div className="muted" style={{ marginTop: 8 }}>
+            Also supports Revolut P&amp;L PDF — use the button above.
+          </div>
+        </div>
+      )}
+      {parsing && <div className="dropzone"><strong>Parsing…</strong></div>}
     </div>
   );
 }
