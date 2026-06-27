@@ -10,7 +10,7 @@ import type { PriceSeries } from './analytics';
 // the bundled JSON otherwise.
 
 const YAHOO_BASE = '/yahoo/v8/finance/chart';
-const BUNDLED_BASE = '/benchmarks';
+const BUNDLED_BASE = `${import.meta.env.BASE_URL}benchmarks`;
 
 interface YahooChart {
   chart: {
